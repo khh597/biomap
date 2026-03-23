@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>생물 탐구 지도</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0d2b1f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="생물지도">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root {
+  --bg: #0d2b1f;
+  --bg2: #122e22;
+  --panel: #162e22;
+  --card: #1c3a2a;
+  --border: #2a5040;
+  --green: #4ade80;
+  --green2: #22c55e;
+  --green-dim: #166534;
+  --amber: #fbbf24;
+  --amber-dim: #78350f;
+  --red: #f87171;
+  --text: #e8f5ee;
+  --text-dim: #7fb89a;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --radius: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
+  background: var(--bg); color: var(--text);
+}
+
+/* ══ SPLASH SCREEN ══ */
+#splash {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 9999; gap: 0;
+  transition: opacity 0.5s;
+}
+#splash .logo-icon { font-size: 72px; margin-bottom: 16px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+#splash h1 { font-size: 28px; font-weight: 800; color: var(--green); letter-spacing: -1px; }
+#splash p { font-size: 14px; color: var(--text-dim); margin-top: 6px; }
+.splash-form { margin-top: 40px; width: 300px; display: flex; flex-direction: column; gap: 12px; }
+.splash-label { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
+.splash-role-btns { display: flex; gap: 10px; }
+.role-btn {
+  flex: 1; padding: 14px 10px; border-radius: 12px; border: 2px solid var(--border);
+  background: var(--card); color: var(--text-dim); font-size: 14px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-align: center;
+}
+.role-btn.selected { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.08); }
+.role-btn .role-icon { font-size: 28px; display: block; margin-bottom: 4px; }
+
+.splash-select-row { display: flex; gap: 8px; }
+.splash-select {
+  flex: 1; padding: 12px; border-radius: 12px; border: 2px solid var(--border);
+  background: var(--card); color: var(--text); font-size: 15px; font-weight: 700;
+  outline: none; appearance: none; text-align: center; cursor: pointer;
+  transition: border-color 0.2s;
+}
+.splash-select:focus { border-color: var(--green); }
+.splash-input {
+  width: 100%; padding: 12px 16px; border-radius: 12px; border: 2px solid var(--border);
+  background: var(--card); color: var(--text); font-size: 16px;
+  outline: none; transition: border-color 0.2s;
+}
+.splash-input:focus { border-color: var(--green); }
+.splash-btn {
+  width: 100%; padding: 16px; border-radius: 14px; border: none;
+  background: var(--green2); color: #0d2b1f; font-size: 17px; font-weight: 800;
+  cursor: pointer; transition: all 0.2s; margin-top: 4px;
+}
+.splash-btn:hover { background: var(--green); transform: translateY(-1px); }
+.splash-btn:disabled { background: var(--border); color: var(--text-dim); cursor: not-allowed; transform: none; }
+.teacher-pw { display: none; }
+
+/* ══ MAIN APP ══ */
+#app { display: none; flex-direction: column; height: 100vh; }
+#app.visible { display: flex; }
+
+/* ══ HEADER ══ */
+header {
+  background: var(--bg2); border-bottom: 1px solid var(--border);
+  padding: env(safe-area-inset-top) 16px 0; min-height: calc(56px + env(safe-area-inset-top));
+  display: flex; align-items: flex-end; padding-bottom: 10px;
+  justify-content: space-between; flex-shrink: 0; z-index: 500;
+}
+.header-left { display: flex; align-items: center; gap: 10px; }
+.header-badge {
+  background: var(--green-dim); color: var(--green);
+  border-radius: 8px; padding: 4px 10px; font-size: 12px; font-weight: 700;
+}
+.header-title { font-size: 16px; font-weight: 800; }
+.header-right { display: flex; align-items: center; gap: 8px; }
+.sync-indicator {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+  box-shadow: 0 0 6px var(--green); animation: blink 2s infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.header-btn {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  border-radius: 10px; padding: 7px 12px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.2s;
+}
+.header-btn:hover { border-color: var(--green); color: var(--green); }
+
+/* ══ LAYOUT ══ */
+.main-layout { display: flex; flex: 1; overflow: hidden; }
+#map { flex: 1; }
+
+/* ══ PANEL ══ */
+.panel {
+  width: 340px; background: var(--panel); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+}
+.panel-tabs { display: flex; border-bottom: 1px solid var(--border); }
+.panel-tab {
+  flex: 1; padding: 13px 8px; text-align: center; font-size: 13px; font-weight: 700;
+  color: var(--text-dim); cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.2s; background: none; border-top: none; border-left: none; border-right: none;
+}
+.panel-tab.active { color: var(--green); border-bottom-color: var(--green); }
+.panel-body { flex: 1; overflow-y: auto; padding: 16px; }
+.panel-body::-webkit-scrollbar { width: 3px; }
+.panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ══ SECTION TITLE ══ */
+.sec { font-size: 10px; font-weight: 800; letter-spacing: 2px; color: var(--text-dim);
+  text-transform: uppercase; margin: 18px 0 10px; }
+.sec:first-child { margin-top: 0; }
+
+/* ══ FORM ══ */
+.fg { margin-bottom: 12px; }
+.fg label { font-size: 11px; font-weight: 700; color: var(--text-dim); display: block; margin-bottom: 5px; letter-spacing: 0.5px; }
+.fi {
+  width: 100%; padding: 10px 13px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--card);
+  color: var(--text); font-size: 14px; outline: none; transition: border-color 0.2s;
+  font-family: inherit;
+}
+.fi:focus { border-color: var(--green); }
+textarea.fi { resize: vertical; min-height: 64px; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* ══ BUTTONS ══ */
+.btn {
+  width: 100%; padding: 13px; border-radius: 12px; border: none;
+  font-size: 15px; font-weight: 800; cursor: pointer; transition: all 0.2s;
+  font-family: inherit;
+}
+.btn-green { background: var(--green2); color: #0d2b1f; }
+.btn-green:hover { background: var(--green); }
+.btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text-dim); margin-top: 8px; }
+.btn-outline:hover { border-color: var(--green); color: var(--green); }
+.btn-red { background: transparent; border: 1.5px solid #4a1f1f; color: var(--red); margin-top: 8px; }
+.btn-red:hover { background: rgba(248,113,113,0.1); }
+
+/* ══ PHOTO ══ */
+.photo-zone {
+  border: 2px dashed var(--border); border-radius: 12px; padding: 20px;
+  text-align: center; cursor: pointer; transition: all 0.2s; background: var(--card);
+  margin-bottom: 12px; position: relative; overflow: hidden;
+}
+.photo-zone:hover { border-color: var(--green); }
+.photo-zone input { display: none; }
+.photo-zone img { width: 100%; border-radius: 8px; display: none; max-height: 180px; object-fit: cover; }
+.photo-zone .ph { pointer-events: none; }
+.photo-zone .ph-icon { font-size: 36px; margin-bottom: 6px; }
+.photo-zone .ph-text { font-size: 12px; color: var(--text-dim); }
+
+/* ══ LOCATION BTN ══ */
+.loc-status {
+  border-radius: 10px; padding: 11px 14px; font-size: 13px; margin-bottom: 12px;
+  background: rgba(251,191,36,0.1); border: 1.5px solid rgba(251,191,36,0.3); color: var(--amber);
+}
+.loc-status.set { background: rgba(74,222,128,0.08); border-color: rgba(74,222,128,0.3); color: var(--green); }
+
+/* ══ STATS ══ */
+.stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+.stat {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 8px; text-align: center;
+}
+.stat .n { font-size: 26px; font-weight: 800; color: var(--green); line-height: 1; }
+.stat .l { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+
+/* ══ CLASS FILTER ══ */
+.class-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.class-pill {
+  padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+  border: 1.5px solid var(--border); color: var(--text-dim); cursor: pointer;
+  transition: all 0.2s; background: none;
+}
+.class-pill.active { border-color: var(--green); color: var(--green); background: rgba(74,222,128,0.1); }
+
+/* ══ BIO CARDS ══ */
+.bio-card {
+  background: var(--card); border: 1.5px solid var(--border); border-radius: 14px;
+  padding: 12px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s;
+}
+.bio-card:hover { border-color: var(--green); transform: translateY(-1px); box-shadow: var(--shadow); }
+.bc-top { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.bc-thumb {
+  width: 52px; height: 52px; border-radius: 10px; object-fit: cover;
+  background: var(--bg2); flex-shrink: 0; display: flex; align-items: center;
+  justify-content: center; font-size: 26px; border: 1px solid var(--border);
+}
+.bc-thumb img { width: 100%; height: 100%; border-radius: 9px; object-fit: cover; }
+.bc-name { font-size: 15px; font-weight: 800; }
+.bc-meta { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.bc-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tag {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 20px;
+  background: var(--bg2); color: var(--text-dim);
+}
+.tag-k { background: rgba(251,191,36,0.15); color: var(--amber); }
+.tag-p { background: rgba(96,165,250,0.15); color: #60a5fa; }
+
+/* ══ SEARCH ══ */
+.search-box {
+  width: 100%; padding: 10px 14px; border-radius: 10px;
+  border: 1.5px solid var(--border); background: var(--card);
+  color: var(--text); font-size: 14px; outline: none; margin-bottom: 14px;
+  font-family: inherit; transition: border-color 0.2s;
+}
+.search-box:focus { border-color: var(--green); }
+
+/* ══ MODAL ══ */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  z-index: 2000; display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.overlay.open { display: flex; }
+.modal {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 20px;
+  padding: 22px; max-width: 460px; width: 100%; max-height: 88vh; overflow-y: auto;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.5); animation: popIn 0.22s ease;
+}
+.modal::-webkit-scrollbar { width: 3px; }
+.modal::-webkit-scrollbar-thumb { background: var(--border); }
+@keyframes popIn { from{transform:scale(0.88);opacity:0} to{transform:scale(1);opacity:1} }
+.modal-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+.modal-title { font-size: 22px; font-weight: 800; }
+.modal-close { background: var(--card); border: 1px solid var(--border); color: var(--text-dim); border-radius: 8px; width: 32px; height: 32px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+.modal-photo { width: 100%; border-radius: 12px; max-height: 220px; object-fit: cover; margin-bottom: 14px; }
+.tax-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.tax-cell { background: var(--card); border-radius: 10px; padding: 10px 12px; }
+.tax-lbl { font-size: 9px; font-weight: 800; letter-spacing: 1.5px; color: var(--text-dim); text-transform: uppercase; }
+.tax-val { font-size: 13px; font-weight: 700; margin-top: 3px; }
+
+/* ══ TEACHER PANEL ══ */
+.info-box {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px; margin-bottom: 12px;
+}
+.info-box .ib-label { font-size: 10px; font-weight: 800; letter-spacing: 1.5px; color: var(--text-dim); text-transform: uppercase; margin-bottom: 6px; }
+.server-url { font-size: 18px; font-weight: 800; color: var(--green); word-break: break-all; }
+.class-manage { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+.cm-btn {
+  background: var(--card); border: 1px solid var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 8px 4px; font-size: 12px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-align: center;
+}
+.cm-btn:hover { border-color: var(--green); color: var(--green); }
+.cm-btn.danger:hover { border-color: var(--red); color: var(--red); }
+
+/* ══ TOAST ══ */
+#toast {
+  position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 12px 20px; border-radius: 20px; font-size: 14px; font-weight: 600;
+  z-index: 5000; opacity: 0; transition: all 0.3s; pointer-events: none;
+  white-space: nowrap; box-shadow: var(--shadow);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ══ MAP PICKING CURSOR ══ */
+.picking #map { cursor: crosshair !important; }
+
+/* ══ EMPTY ══ */
+.empty { text-align: center; padding: 40px 16px; color: var(--text-dim); }
+.empty .ei { font-size: 48px; margin-bottom: 10px; }
+.empty p { font-size: 13px; }
+
+/* ══ MOBILE ══ */
+@media (max-width: 700px) {
+  .panel { position: absolute; bottom: 0; left: 0; right: 0; width: 100%; height: 52%; border-left: none; border-top: 1px solid var(--border); border-radius: 20px 20px 0 0; z-index: 200; }
+  .main-layout { flex-direction: column; }
+  #map { height: 48%; flex: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ SPLASH ══ -->
+<div id="splash">
+  <div class="logo-icon">🌿</div>
+  <h1>생물 탐구 지도</h1>
+  <p>학교에서 발견한 생물을 기록해요</p>
+
+  <div class="splash-form">
+    <div>
+      <div class="splash-label">역할 선택</div>
+      <div class="splash-role-btns">
+        <button class="role-btn" id="roleStudent" onclick="selectRole('student')">
+          <span class="role-icon">🧑‍🎓</span>학생
+        </button>
+        <button class="role-btn" id="roleTeacher" onclick="selectRole('teacher')">
+          <span class="role-icon">👩‍🏫</span>교사
+        </button>
+      </div>
+    </div>
+
+    <div id="studentFields">
+      <div class="splash-label">학년 · 반 · 번호</div>
+      <div class="splash-select-row">
+        <select class="splash-select" id="selGrade">
+          <option value="">학년</option>
+          <option value="1">1학년</option>
+        </select>
+        <select class="splash-select" id="selClass">
+          <option value="">반</option>
+          <option value="1">1반</option>
+          <option value="2">2반</option>
+          <option value="3">3반</option>
+          <option value="4">4반</option>
+          <option value="5">5반</option>
+          <option value="6">6반</option>
+        </select>
+        <select class="splash-select" id="selNum">
+          <option value="">번호</option>
+        </select>
+      </div>
+      <div>
+        <div class="splash-label" style="margin-top:10px">이름</div>
+        <input class="splash-input" id="inputName" placeholder="홍길동" />
+      </div>
+    </div>
+
+    <div id="teacherFields" style="display:none">
+      <div class="splash-label">교사 비밀번호</div>
+      <input class="splash-input" id="teacherPw" type="password" placeholder="비밀번호 입력 (기본: 1234)" />
+    </div>
+
+    <button class="splash-btn" id="enterBtn" onclick="enterApp()">시작하기 →</button>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="app">
+  <header>
+    <div class="header-left">
+      <span style="font-size:22px">🌿</span>
+      <div>
+        <div class="header-title" id="headerTitle">생물 탐구 지도</div>
+        <div style="font-size:11px;color:var(--text-dim)" id="headerSub"></div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="sync-indicator" id="syncDot" title="실시간 동기화 중"></div>
+      <button class="header-btn" id="filterClassBtn" style="display:none" onclick="showClassFilter()">반 선택</button>
+      <button class="header-btn" onclick="logout()">나가기</button>
+    </div>
+  </header>
+
+  <div class="main-layout">
+    <div id="map"></div>
+    <div class="panel">
+      <div class="panel-tabs" id="panelTabs"></div>
+      <div class="panel-body" id="panelBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ DETAIL MODAL ══ -->
+<div class="overlay" id="detailOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modalTitle"></div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div id="modalBody"></div>
+  </div>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let userRole = null;
+let userInfo = {};
+let currentTab = 'register'; // register | view
+let pickingLoc = false;
+let pendingLoc = null;
+let pendingPhoto = null;
+let mapObj = null;
+let markerLayer = {};
+let viewFilter = 'all'; // 'all' | '1' | '2' | ... (반)
+let teacherViewClass = 'all';
+
+const TEACHER_PW = '1234';
+const STORAGE_KEY = 'biomap_data_v2';
+const CLASSES = ['1','2','3','4','5','6'];
+
+// 번호 select 1~30번 생성
+(function populateNumSelect() {
+  const sel = document.getElementById('selNum');
+  if (!sel) return;
+  for (let i = 1; i <= 30; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = i + '번';
+    sel.appendChild(opt);
+  }
+})();
+
+// ══════════════════════════════════════════════
+// DATA (shared via localStorage + BroadcastChannel)
+// ══════════════════════════════════════════════
+function getData() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function setData(arr) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
+  try { bc.postMessage({ type: 'sync' }); } catch {}
+}
+
+// BroadcastChannel for same-device multi-tab sync
+// (WiFi 공유는 서버 방식이 필요하지만 단일 기기 다탭/PWA 동기화 지원)
+let bc;
+try {
+  bc = new BroadcastChannel('biomap_sync');
+  bc.onmessage = (e) => {
+    if (e.data?.type === 'sync') refreshMarkers(), renderPanel();
+  };
+} catch { bc = { postMessage: () => {} }; }
+
+// ══════════════════════════════════════════════
+// SPLASH / ROLE
+// ══════════════════════════════════════════════
+function selectRole(r) {
+  userRole = r;
+  document.getElementById('roleStudent').classList.toggle('selected', r === 'student');
+  document.getElementById('roleTeacher').classList.toggle('selected', r === 'teacher');
+  document.getElementById('studentFields').style.display = r === 'student' ? 'flex' : 'none';
+  document.getElementById('studentFields').style.flexDirection = 'column';
+  document.getElementById('teacherFields').style.display = r === 'teacher' ? 'block' : 'none';
+}
+
+function enterApp() {
+  if (!userRole) { showToast('역할을 선택해주세요'); return; }
+  if (userRole === 'teacher') {
+    const pw = document.getElementById('teacherPw').value;
+    if (pw !== TEACHER_PW) { showToast('❌ 비밀번호가 틀렸어요'); return; }
+    userInfo = { role: 'teacher', name: '선생님' };
+  } else {
+    const g = document.getElementById('selGrade').value;
+    const c = document.getElementById('selClass').value;
+    const n = document.getElementById('selNum').value;
+    const nm = document.getElementById('inputName').value.trim();
+    if (!g || !c || !n) { showToast('학년·반·번호를 선택해주세요'); return; }
+    if (!nm) { showToast('이름을 입력해주세요'); return; }
+    userInfo = { role: 'student', grade: g, cls: c, num: n, name: nm,
+      label: `${g}학년 ${c}반 ${n}번 ${nm}` };
+  }
+  launchApp();
+}
+
+// ══════════════════════════════════════════════
+// MAP INIT
+// ══════════════════════════════════════════════
+function initMap() {
+  mapObj = L.map('map', { zoomControl: true, tap: true }).setView([37.5665, 126.9780], 17);
+
+  // ESRI World Imagery — 고화질 위성, 확대해도 선명
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    {
+      attribution: 'Tiles © Esri — Source: Esri, Maxar, GeoEye',
+      maxZoom: 21,
+      maxNativeZoom: 19,
+    }
+  ).addTo(mapObj);
+
+  // 위성 위에 라벨 오버레이 (도로명/건물명 표시)
+  L.tileLayer(
+    'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    { maxZoom: 21, maxNativeZoom: 19, opacity: 0.7 }
+  ).addTo(mapObj);
+
+  mapObj.on('click', onMapClick);
+}
+
+function onMapClick(e) {
+  if (!pickingLoc) return;
+  pendingLoc = { lat: e.latlng.lat, lng: e.latlng.lng };
+  stopPicking();
+  renderPanel();
+  showToast('📍 위치 선택 완료!');
+}
+
+// ══════════════════════════════════════════════
+// APP LAUNCH
+// ══════════════════════════════════════════════
+function launchApp() {
+  document.getElementById('splash').style.opacity = '0';
+  setTimeout(() => {
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('app').classList.add('visible');
+    initMap();
+    setupHeader();
+    setupTabs();
+    refreshMarkers();
+    renderPanel();
+    // 위치 권한 요청
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(pos => {
+        mapObj.flyTo([pos.coords.latitude, pos.coords.longitude], 18, { duration: 1.5 });
+      }, () => {});
+    }
+  }, 500);
+}
+
+function setupHeader() {
+  if (userRole === 'teacher') {
+    document.getElementById('headerTitle').textContent = '생물 탐구 지도 — 교사';
+    document.getElementById('headerSub').textContent = '전체 반 관리';
+    document.getElementById('filterClassBtn').style.display = 'block';
+  } else {
+    document.getElementById('headerTitle').textContent = '생물 탐구 지도';
+    document.getElementById('headerSub').textContent = userInfo.label;
+  }
+}
+
+function setupTabs() {
+  const tabs = document.getElementById('panelTabs');
+  if (userRole === 'student') {
+    tabs.innerHTML = `
+      <button class="panel-tab active" onclick="switchTab('register',this)">🔬 생물 등록</button>
+      <button class="panel-tab" onclick="switchTab('view',this)">🗺️ 우리 반 전체</button>
+    `;
+    currentTab = 'register';
+  } else {
+    tabs.innerHTML = `
+      <button class="panel-tab active" onclick="switchTab('teacher_view',this)">🗺️ 반별 현황</button>
+      <button class="panel-tab" onclick="switchTab('teacher_manage',this)">⚙️ 관리</button>
+    `;
+    currentTab = 'teacher_view';
+  }
+}
+
+function switchTab(tab, el) {
+  currentTab = tab;
+  document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderPanel();
+}
+
+// ══════════════════════════════════════════════
+// PANEL RENDER
+// ══════════════════════════════════════════════
+function renderPanel() {
+  const body = document.getElementById('panelBody');
+  if (currentTab === 'register') body.innerHTML = renderRegister();
+  else if (currentTab === 'view') body.innerHTML = renderStudentView();
+  else if (currentTab === 'teacher_view') body.innerHTML = renderTeacherView();
+  else if (currentTab === 'teacher_manage') body.innerHTML = renderTeacherManage();
+}
+
+// ── 학생: 등록 ──
+function renderRegister() {
+  const locSet = pendingLoc !== null;
+  return `
+    <div class="sec">사진 업로드</div>
+    <label class="photo-zone" for="photoInput">
+      <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="handlePhoto(event)">
+      <img id="photoPreview" />
+      <div class="ph" id="photoPlaceholder">
+        <div class="ph-icon">📷</div>
+        <div class="ph-text">탭하여 사진 찍기 또는 업로드</div>
+      </div>
+    </label>
+
+    <div class="sec">생물 정보</div>
+    <div class="fg"><label>생물 이름</label><input class="fi" id="bioName" placeholder="민들레, 참새, 무당벌레..." /></div>
+    <div class="fg"><label>메모 / 특이사항</label><textarea class="fi" id="bioNote" placeholder="발견 상황, 특징 등..."></textarea></div>
+
+    <div class="sec">생물 분류 체계</div>
+    <div class="grid2">
+      <div class="fg"><label>계 Kingdom</label><input class="fi" id="t_k" placeholder="식물계" /></div>
+      <div class="fg"><label>문 Phylum</label><input class="fi" id="t_p" placeholder="속씨식물문" /></div>
+      <div class="fg"><label>강 Class</label><input class="fi" id="t_c" placeholder="쌍떡잎식물강" /></div>
+      <div class="fg"><label>목 Order</label><input class="fi" id="t_o" placeholder="국화목" /></div>
+      <div class="fg"><label>과 Family</label><input class="fi" id="t_f" placeholder="국화과" /></div>
+      <div class="fg"><label>속 Genus</label><input class="fi" id="t_g" placeholder="민들레속" /></div>
+    </div>
+    <div class="fg"><label>종 Species (학명)</label><input class="fi" id="t_s" placeholder="Taraxacum officinale" /></div>
+
+    <div class="sec">위치 선택</div>
+    <div class="loc-status ${locSet ? 'set' : ''}" id="locStatus">
+      ${locSet
+        ? `✅ 위치 선택 완료 (${pendingLoc.lat.toFixed(5)}, ${pendingLoc.lng.toFixed(5)})`
+        : `⚠️ 아래 버튼 → 지도에서 위치를 탭하세요`}
+    </div>
+    <button class="btn ${pickingLoc ? 'btn-green' : 'btn-outline'}" onclick="startPicking()">
+      ${pickingLoc ? '🎯 지도를 탭하세요...' : '📍 지도에서 위치 선택하기'}
+    </button>
+    <button class="btn btn-green" onclick="submitBio()" style="margin-top:10px">🌿 생물 등록하기</button>
+  `;
+
+  // restore photo preview if exists
+  setTimeout(() => {
+    if (pendingPhoto) {
+      const img = document.getElementById('photoPreview');
+      const ph = document.getElementById('photoPlaceholder');
+      if (img) { img.src = pendingPhoto; img.style.display = 'block'; }
+      if (ph) ph.style.display = 'none';
+    }
+  }, 0);
+}
+
+// ── 학생: 반 전체 보기 ──
+function renderStudentView() {
+  const allData = getData();
+  const myClass = allData.filter(b => b.cls === userInfo.cls && b.grade === userInfo.grade);
+  const kingdoms = {};
+  myClass.forEach(b => { kingdoms[b.kingdom] = (kingdoms[b.kingdom]||0)+1; });
+  const students = new Set(myClass.map(b => b.studentName)).size;
+
+  const cards = myClass.length === 0
+    ? `<div class="empty"><div class="ei">🔍</div><p>아직 등록된 생물이 없어요</p></div>`
+    : myClass.map(b => bioCard(b)).join('');
+
+  return `
+    <div class="stats">
+      <div class="stat"><div class="n">${myClass.length}</div><div class="l">등록 생물</div></div>
+      <div class="stat"><div class="n">${students}</div><div class="l">참여 학생</div></div>
+      <div class="stat"><div class="n">${Object.keys(kingdoms).length}</div><div class="l">계(界) 수</div></div>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px">
+      ${Object.entries(kingdoms).map(([k,v])=>`<span class="tag tag-k">${k} ${v}</span>`).join('')}
+    </div>
+    <input class="search-box" placeholder="🔍 생물명 / 이름 검색..." oninput="filterCards(this.value, 'student')" id="stuSearch">
+    <div id="stuCards">${cards}</div>
+  `;
+}
+
+// ── 교사: 반별 현황 ──
+function renderTeacherView() {
+  const allData = getData();
+  const cls = teacherViewClass;
+  const filtered = cls === 'all' ? allData : allData.filter(b => b.cls === cls && b.grade === '1');
+  const kingdoms = {};
+  filtered.forEach(b => { kingdoms[b.kingdom] = (kingdoms[b.kingdom]||0)+1; });
+
+  const classCounts = {};
+  CLASSES.forEach(c => { classCounts[c] = allData.filter(b => b.cls === c).length; });
+
+  const cards = filtered.length === 0
+    ? `<div class="empty"><div class="ei">🔍</div><p>등록된 생물이 없어요</p></div>`
+    : filtered.map(b => bioCard(b)).join('');
+
+  return `
+    <div class="sec">반 선택</div>
+    <div class="class-pills">
+      <button class="class-pill ${cls==='all'?'active':''}" onclick="setTeacherClass('all')">전체 (${allData.length})</button>
+      ${CLASSES.map(c=>`<button class="class-pill ${cls===c?'active':''}" onclick="setTeacherClass('${c}')">${c}반 (${classCounts[c]})</button>`).join('')}
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="n">${filtered.length}</div><div class="l">등록 생물</div></div>
+      <div class="stat"><div class="n">${new Set(filtered.map(b=>b.studentName)).size}</div><div class="l">참여 학생</div></div>
+      <div class="stat"><div class="n">${Object.keys(kingdoms).length}</div><div class="l">계(界) 수</div></div>
+    </div>
+    <input class="search-box" placeholder="🔍 생물명 / 이름 / 반 검색..." oninput="filterCards(this.value,'teacher')" id="tchSearch">
+    <div id="tchCards">${cards}</div>
+  `;
+}
+
+// ── 교사: 관리 ──
+function renderTeacherManage() {
+  const allData = getData();
+  const classCounts = {};
+  CLASSES.forEach(c => { classCounts[c] = allData.filter(b => b.cls === c).length; });
+  return `
+    <div class="sec">서버 안내</div>
+    <div class="info-box">
+      <div class="ib-label">같은 와이파이 환경에서 데이터 공유</div>
+      <div style="font-size:13px;color:var(--text-dim);line-height:1.7;margin-top:6px">
+        학생들이 같은 기기에서 접속하거나, 교사 PC에서 <code style="background:var(--bg);padding:2px 6px;border-radius:4px;color:var(--green)">server.bat</code>을 실행하면 같은 와이파이의 학생 태블릿과 실시간 공유됩니다.<br><br>
+        📁 배포된 폴더의 <strong>README.txt</strong>를 참고하세요.
+      </div>
+    </div>
+
+    <div class="sec">반별 데이터 초기화</div>
+    <div class="class-manage">
+      ${CLASSES.map(c=>`
+        <div class="cm-btn danger" onclick="clearClass('${c}')">
+          ${c}반 삭제<br><span style="font-size:10px;opacity:0.6">${classCounts[c]}건</span>
+        </div>`).join('')}
+    </div>
+
+    <div class="sec">전체 관리</div>
+    <button class="btn btn-outline" onclick="exportData()">📤 데이터 내보내기 (JSON)</button>
+    <button class="btn btn-red" onclick="clearAll()">🗑️ 전체 데이터 삭제</button>
+
+    <div class="sec">교사 비밀번호 변경</div>
+    <div class="fg"><label>새 비밀번호</label><input class="fi" id="newPw" type="password" placeholder="새 비밀번호 입력"/></div>
+    <button class="btn btn-outline" onclick="changePw()">🔒 비밀번호 변경</button>
+  `;
+}
+
+function bioCard(b) {
+  const thumb = b.photo
+    ? `<div class="bc-thumb"><img src="${b.photo}" /></div>`
+    : `<div class="bc-thumb">${b.emoji}</div>`;
+  return `
+    <div class="bio-card" onclick="openDetail(${b.id});flyTo(${b.lat},${b.lng})">
+      <div class="bc-top">
+        ${thumb}
+        <div>
+          <div class="bc-name">${b.name}</div>
+          <div class="bc-meta">${b.grade}학년 ${b.cls}반 · ${b.studentName} (${b.num}번)</div>
+        </div>
+      </div>
+      <div class="bc-tags">
+        <span class="tag tag-k">${b.kingdom}</span>
+        <span class="tag tag-p">${b.phylum}</span>
+        <span class="tag">${b.cls_tax}</span>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// MARKERS
+// ══════════════════════════════════════════════
+const KINGDOM_COLORS = {
+  '동물계': '#fb923c', '식물계': '#4ade80', '균계': '#c084fc',
+  '원생생물계': '#38bdf8', '세균계': '#f87171', '미분류': '#94a3b8'
+};
+const KINGDOM_EMOJI = {
+  '동물계': '🐾', '식물계': '🌿', '균계': '🍄',
+  '원생생물계': '🦠', '세균계': '🧫', '미분류': '❓'
+};
+
+function makeIcon(bio) {
+  const c = KINGDOM_COLORS[bio.kingdom] || '#94a3b8';
+  const e = bio.emoji || '🌱';
+  return L.divIcon({
+    html: `<div style="width:38px;height:38px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${c};border:3px solid #0d2b1f;box-shadow:0 3px 12px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:16px;line-height:1">${e}</span></div>`,
+    iconSize: [38, 38], iconAnchor: [19, 38], className: ''
+  });
+}
+
+function refreshMarkers() {
+  if (!mapObj) return;
+  const allData = getData();
+
+  // 현재 필터 결정
+  let visible;
+  if (userRole === 'teacher') {
+    visible = teacherViewClass === 'all' ? allData : allData.filter(b => b.cls === teacherViewClass);
+  } else {
+    // 학생: 등록 탭이면 전체 반 표시, 뷰 탭이면 자기 반만
+    if (currentTab === 'view') {
+      visible = allData.filter(b => b.cls === userInfo.cls && b.grade === userInfo.grade);
+    } else {
+      visible = allData;
+    }
+  }
+
+  // 기존 마커 제거
+  Object.values(markerLayer).forEach(m => mapObj.removeLayer(m));
+  markerLayer = {};
+
+  visible.forEach(b => {
+    const m = L.marker([b.lat, b.lng], { icon: makeIcon(b) })
+      .addTo(mapObj)
+      .on('click', () => openDetail(b.id));
+    // 클래스 라벨 툴팁
+    m.bindTooltip(`<b>${b.name}</b><br>${b.grade}학년 ${b.cls}반 · ${b.studentName}`, {
+      direction: 'top', offset: [0, -40],
+      className: 'leaflet-tooltip-dark'
+    });
+    markerLayer[b.id] = m;
+  });
+}
+
+// ══════════════════════════════════════════════
+// SUBMIT
+// ══════════════════════════════════════════════
+function submitBio() {
+  const name = document.getElementById('bioName')?.value.trim();
+  if (!name) { showToast('생물 이름을 입력해주세요'); return; }
+  if (!pendingLoc) { showToast('지도에서 위치를 선택해주세요'); return; }
+
+  const kingdom = document.getElementById('t_k')?.value.trim() || '미분류';
+  const newBio = {
+    id: Date.now(),
+    name,
+    studentName: userInfo.name,
+    num: userInfo.num,
+    grade: userInfo.grade,
+    cls: userInfo.cls,
+    lat: pendingLoc.lat, lng: pendingLoc.lng,
+    kingdom,
+    phylum: document.getElementById('t_p')?.value.trim() || '-',
+    cls_tax: document.getElementById('t_c')?.value.trim() || '-',
+    order: document.getElementById('t_o')?.value.trim() || '-',
+    family: document.getElementById('t_f')?.value.trim() || '-',
+    genus: document.getElementById('t_g')?.value.trim() || '-',
+    species: document.getElementById('t_s')?.value.trim() || '-',
+    note: document.getElementById('bioNote')?.value.trim() || '',
+    photo: pendingPhoto || null,
+    emoji: KINGDOM_EMOJI[kingdom] || '🌱',
+    color: KINGDOM_COLORS[kingdom] || '#94a3b8',
+    registeredAt: new Date().toLocaleString('ko-KR')
+  };
+
+  const arr = getData();
+  arr.push(newBio);
+  setData(arr);
+
+  pendingLoc = null; pendingPhoto = null;
+  refreshMarkers();
+  mapObj.flyTo([newBio.lat, newBio.lng], 19, { duration: 1.2 });
+  showToast(`✅ "${name}" 등록 완료!`);
+  switchTab('view', document.querySelectorAll('.panel-tab')[1]);
+}
+
+// ══════════════════════════════════════════════
+// PHOTO
+// ══════════════════════════════════════════════
+function handlePhoto(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  // 갤럭시 S6 Lite 최적화: 리사이즈
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 800;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      pendingPhoto = canvas.toDataURL('image/jpeg', 0.8);
+      const preview = document.getElementById('photoPreview');
+      const ph = document.getElementById('photoPlaceholder');
+      if (preview) { preview.src = pendingPhoto; preview.style.display = 'block'; }
+      if (ph) ph.style.display = 'none';
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══════════════════════════════════════════════
+// LOCATION PICKING
+// ══════════════════════════════════════════════
+function startPicking() {
+  pickingLoc = true;
+  document.getElementById('app').classList.add('picking');
+  showToast('지도에서 위치를 탭하세요 👆');
+}
+function stopPicking() {
+  pickingLoc = false;
+  document.getElementById('app').classList.remove('picking');
+}
+
+// ══════════════════════════════════════════════
+// DETAIL MODAL
+// ══════════════════════════════════════════════
+function openDetail(id) {
+  const b = getData().find(x => x.id === id);
+  if (!b) return;
+  document.getElementById('modalTitle').textContent = b.name;
+  const canDelete = userRole === 'teacher' || (b.studentName === userInfo.name && b.cls === userInfo.cls);
+  document.getElementById('modalBody').innerHTML = `
+    ${b.photo ? `<img class="modal-photo" src="${b.photo}" />` : `<div style="font-size:72px;text-align:center;padding:20px 0;margin-bottom:14px">${b.emoji}</div>`}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      <span class="tag tag-k">${b.kingdom}</span>
+      <span class="tag tag-p">${b.phylum}</span>
+    </div>
+    <div style="font-size:13px;color:var(--text-dim);margin-bottom:8px">
+      👤 ${b.grade}학년 ${b.cls}반 ${b.num}번 ${b.studentName}
+      &nbsp;·&nbsp; 🕐 ${b.registeredAt || ''}
+    </div>
+    ${b.note ? `<div style="background:var(--card);border-radius:10px;padding:12px;font-size:14px;margin-bottom:14px;line-height:1.6;color:var(--text)">📝 ${b.note}</div>` : ''}
+    <div class="sec" style="margin-top:0">분류 체계</div>
+    <div class="tax-grid">
+      <div class="tax-cell"><div class="tax-lbl">계 Kingdom</div><div class="tax-val">${b.kingdom}</div></div>
+      <div class="tax-cell"><div class="tax-lbl">문 Phylum</div><div class="tax-val">${b.phylum}</div></div>
+      <div class="tax-cell"><div class="tax-lbl">강 Class</div><div class="tax-val">${b.cls_tax}</div></div>
+      <div class="tax-cell"><div class="tax-lbl">목 Order</div><div class="tax-val">${b.order}</div></div>
+      <div class="tax-cell"><div class="tax-lbl">과 Family</div><div class="tax-val">${b.family}</div></div>
+      <div class="tax-cell"><div class="tax-lbl">속 Genus</div><div class="tax-val">${b.genus}</div></div>
+      <div class="tax-cell" style="grid-column:span 2"><div class="tax-lbl">종 Species (학명)</div><div class="tax-val" style="font-style:italic">${b.species}</div></div>
+    </div>
+    <div style="margin-top:12px;font-size:11px;color:var(--text-dim)">📍 ${b.lat.toFixed(6)}, ${b.lng.toFixed(6)}</div>
+    ${canDelete ? `<button class="btn btn-red" style="margin-top:16px" onclick="deleteBio(${b.id})">🗑️ 삭제</button>` : ''}
+  `;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+function closeModal() { document.getElementById('detailOverlay').classList.remove('open'); }
+document.getElementById('detailOverlay').addEventListener('click', e => { if (e.target.id === 'detailOverlay') closeModal(); });
+
+function deleteBio(id) {
+  if (!confirm('이 생물 기록을 삭제할까요?')) return;
+  setData(getData().filter(b => b.id !== id));
+  refreshMarkers(); renderPanel(); closeModal();
+  showToast('삭제되었습니다');
+}
+
+// ══════════════════════════════════════════════
+// TEACHER ACTIONS
+// ══════════════════════════════════════════════
+function setTeacherClass(c) {
+  teacherViewClass = c;
+  refreshMarkers();
+  renderPanel();
+}
+
+function clearClass(c) {
+  if (!confirm(`${c}반 데이터를 전부 삭제할까요?`)) return;
+  setData(getData().filter(b => b.cls !== c));
+  refreshMarkers(); renderPanel();
+  showToast(`${c}반 데이터 삭제 완료`);
+}
+
+function clearAll() {
+  if (!confirm('정말 전체 데이터를 삭제할까요? 되돌릴 수 없어요!')) return;
+  setData([]);
+  refreshMarkers(); renderPanel();
+  showToast('전체 데이터가 삭제되었습니다');
+}
+
+function exportData() {
+  const data = getData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `biomap_${new Date().toISOString().slice(0,10)}.json`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+function changePw() {
+  const pw = document.getElementById('newPw')?.value;
+  if (!pw || pw.length < 4) { showToast('4자 이상 입력해주세요'); return; }
+  // 실제 환경에선 서버에 저장해야 하지만 여기선 로컬 저장
+  localStorage.setItem('teacher_pw', pw);
+  showToast('✅ 비밀번호 변경 완료');
+}
+
+function showClassFilter() {
+  const c = prompt('볼 반을 입력하세요 (1~6, 전체: all)', teacherViewClass);
+  if (c !== null) { teacherViewClass = c; refreshMarkers(); renderPanel(); }
+}
+
+// ══════════════════════════════════════════════
+// SEARCH / FILTER
+// ══════════════════════════════════════════════
+function filterCards(q, mode) {
+  const allData = getData();
+  const lq = q.toLowerCase();
+  let data;
+  if (mode === 'student') {
+    data = allData.filter(b => b.cls === userInfo.cls && b.grade === userInfo.grade);
+  } else {
+    data = teacherViewClass === 'all' ? allData : allData.filter(b => b.cls === teacherViewClass);
+  }
+  const filtered = !lq ? data : data.filter(b =>
+    b.name.includes(lq) || b.studentName.includes(lq) || b.kingdom.includes(lq) || b.cls.includes(lq)
+  );
+  const id = mode === 'student' ? 'stuCards' : 'tchCards';
+  document.getElementById(id).innerHTML = filtered.length === 0
+    ? `<div class="empty"><div class="ei">🔍</div><p>검색 결과 없음</p></div>`
+    : filtered.map(bioCard).join('');
+}
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+function flyTo(lat, lng) { mapObj?.flyTo([lat, lng], 19, { duration: 1.2 }); }
+function logout() { if (confirm('나가시겠어요?')) { userRole = null; location.reload(); } }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// 주기적 동기화 (같은 와이파이 환경 서버 사용 시 확장 포인트)
+setInterval(() => {
+  if (userRole) { refreshMarkers(); }
+}, 10000);
+
+// Leaflet tooltip dark style
+const style = document.createElement('style');
+style.textContent = `.leaflet-tooltip-dark{background:var(--panel,#162e22)!important;border:1px solid #2a5040!important;color:#e8f5ee!important;font-size:12px!important;font-family:'Apple SD Gothic Neo',sans-serif!important;border-radius:8px!important;padding:6px 10px!important;box-shadow:0 4px 16px rgba(0,0,0,0.4)!important}.leaflet-tooltip-dark::before{border-top-color:#2a5040!important}`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>
