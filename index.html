@@ -13,6 +13,29 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyBDmJtjFvEEWbT9VM9UXaqnNHUvxqOqgN8",
+    authDomain: "gen-lang-client-0560762848.firebaseapp.com",
+    projectId: "gen-lang-client-0560762848",
+    storageBucket: "gen-lang-client-0560762848.firebasestorage.app",
+    messagingSenderId: "956235492978",
+    appId: "1:956235492978:web:2677736dabdabb7d7b1ceb"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  window._db = db;
+  window._col = (name) => collection(db, name);
+  window._addDoc = addDoc;
+  window._onSnapshot = onSnapshot;
+  window._deleteDoc = deleteDoc;
+  window._doc = (path, id) => doc(db, path, id);
+  window._query = query;
+  window._orderBy = orderBy;
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
 <style>
 :root {
   --bg: #0d2b1f;
@@ -428,25 +451,35 @@ const CLASSES = ['1','2','3','4','5','6'];
 })();
 
 // ══════════════════════════════════════════════
-// DATA (shared via localStorage + BroadcastChannel)
+// FIREBASE DATA
 // ══════════════════════════════════════════════
-function getData() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; }
-}
-function setData(arr) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(arr));
-  try { bc.postMessage({ type: 'sync' }); } catch {}
+let _cachedData = [];
+
+function getData() { return _cachedData; }
+
+async function addBioToDB(bio) {
+  try {
+    await window._addDoc(window._col('biomap'), bio);
+  } catch(e) { showToast('❌ 저장 실패: ' + e.message); }
 }
 
-// BroadcastChannel for same-device multi-tab sync
-// (WiFi 공유는 서버 방식이 필요하지만 단일 기기 다탭/PWA 동기화 지원)
-let bc;
-try {
-  bc = new BroadcastChannel('biomap_sync');
-  bc.onmessage = (e) => {
-    if (e.data?.type === 'sync') refreshMarkers(), renderPanel();
-  };
-} catch { bc = { postMessage: () => {} }; }
+async function deleteBioFromDB(firestoreId) {
+  try {
+    await window._deleteDoc(window._doc('biomap', firestoreId));
+  } catch(e) { showToast('❌ 삭제 실패: ' + e.message); }
+}
+
+function startRealtimeSync() {
+  const q = window._query(window._col('biomap'), window._orderBy('registeredAt', 'asc'));
+  window._onSnapshot(q, (snapshot) => {
+    _cachedData = snapshot.docs.map(d => ({ ...d.data(), _fid: d.id }));
+    if (userRole) { refreshMarkers(); renderPanel(); }
+  });
+}
+
+window.addEventListener('firebase-ready', () => {
+  startRealtimeSync();
+});
 
 // ══════════════════════════════════════════════
 // SPLASH / ROLE
@@ -801,7 +834,7 @@ function refreshMarkers() {
 // ══════════════════════════════════════════════
 // SUBMIT
 // ══════════════════════════════════════════════
-function submitBio() {
+async function submitBio() {
   const name = document.getElementById('bioName')?.value.trim();
   if (!name) { showToast('생물 이름을 입력해주세요'); return; }
   if (!pendingLoc) { showToast('지도에서 위치를 선택해주세요'); return; }
@@ -829,12 +862,10 @@ function submitBio() {
     registeredAt: new Date().toLocaleString('ko-KR')
   };
 
-  const arr = getData();
-  arr.push(newBio);
-  setData(arr);
+  showToast('⏳ 저장 중...');
+  await addBioToDB(newBio);
 
   pendingLoc = null; pendingPhoto = null;
-  refreshMarkers();
   mapObj.flyTo([newBio.lat, newBio.lng], 19, { duration: 1.2 });
   showToast(`✅ "${name}" 등록 완료!`);
   switchTab('view', document.querySelectorAll('.panel-tab')[1]);
@@ -921,10 +952,13 @@ function openDetail(id) {
 function closeModal() { document.getElementById('detailOverlay').classList.remove('open'); }
 document.getElementById('detailOverlay').addEventListener('click', e => { if (e.target.id === 'detailOverlay') closeModal(); });
 
-function deleteBio(id) {
+async function deleteBio(id) {
   if (!confirm('이 생물 기록을 삭제할까요?')) return;
-  setData(getData().filter(b => b.id !== id));
-  refreshMarkers(); renderPanel(); closeModal();
+  const bio = _cachedData.find(b => b.id === id);
+  if (bio && bio._fid) {
+    await deleteBioFromDB(bio._fid);
+  }
+  closeModal();
   showToast('삭제되었습니다');
 }
 
@@ -937,17 +971,20 @@ function setTeacherClass(c) {
   renderPanel();
 }
 
-function clearClass(c) {
+async function clearClass(c) {
   if (!confirm(`${c}반 데이터를 전부 삭제할까요?`)) return;
-  setData(getData().filter(b => b.cls !== c));
-  refreshMarkers(); renderPanel();
+  const toDelete = _cachedData.filter(b => b.cls === c);
+  for (const b of toDelete) {
+    if (b._fid) await deleteBioFromDB(b._fid);
+  }
   showToast(`${c}반 데이터 삭제 완료`);
 }
 
-function clearAll() {
+async function clearAll() {
   if (!confirm('정말 전체 데이터를 삭제할까요? 되돌릴 수 없어요!')) return;
-  setData([]);
-  refreshMarkers(); renderPanel();
+  for (const b of _cachedData) {
+    if (b._fid) await deleteBioFromDB(b._fid);
+  }
   showToast('전체 데이터가 삭제되었습니다');
 }
 
@@ -1006,10 +1043,7 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// 주기적 동기화 (같은 와이파이 환경 서버 사용 시 확장 포인트)
-setInterval(() => {
-  if (userRole) { refreshMarkers(); }
-}, 10000);
+// Firebase 실시간 동기화로 주기적 polling 불필요
 
 // Leaflet tooltip dark style
 const style = document.createElement('style');
