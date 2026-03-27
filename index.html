@@ -623,7 +623,7 @@ function renderRegister() {
   return `
     <div class="sec">사진 업로드</div>
     <label class="photo-zone" for="photoInput">
-      <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="handlePhoto(event)">
+      <input type="file" id="photoInput" accept="image/*" onchange="handlePhoto(event)">
       <img id="photoPreview" />
       <div class="ph" id="photoPlaceholder">
         <div class="ph-icon">📷</div>
