@@ -477,7 +477,13 @@ function startRealtimeSync() {
   const q = window._query(window._col('biomap'), window._orderBy('registeredAt', 'asc'));
   window._onSnapshot(q, (snapshot) => {
     _cachedData = snapshot.docs.map(d => ({ ...d.data(), _fid: d.id }));
-    if (userRole) { refreshMarkers(); renderPanel(); }
+    if (userRole) {
+      refreshMarkers();
+      // 학생이 등록 탭에서 입력 중일 때는 화면 갱신 안 함 (튕김 방지)
+      if (currentTab !== 'register') {
+        renderPanel();
+      }
+    }
   });
 }
 
@@ -871,8 +877,31 @@ async function submitBio() {
 
   pendingLoc = null; pendingPhoto = null;
   mapObj.flyTo([newBio.lat, newBio.lng], 19, { duration: 1.2 });
-  showToast(`✅ "${name}" 등록 완료!`);
-  switchTab('view', document.querySelectorAll('.panel-tab')[1]);
+
+  // 등록 완료 화면 표시
+  const body = document.getElementById('panelBody');
+  if (body) {
+    body.innerHTML = `
+      <div style="text-align:center; padding: 40px 16px;">
+        <div style="font-size:3rem; margin-bottom:12px;">✅</div>
+        <div style="font-size:1.2rem; font-weight:700; margin-bottom:6px;">"${name}" 등록 완료!</div>
+        <div style="font-size:0.9rem; color:var(--text-sub); margin-bottom:28px;">지도에 마커가 추가되었어요</div>
+        <button class="btn btn-green" onclick="resetRegisterForm()" style="margin-bottom:10px; width:100%">
+          🔬 추가 생물 등록하기
+        </button>
+        <button class="btn btn-outline" onclick="switchTab('view', document.querySelectorAll('.panel-tab')[1])" style="width:100%">
+          🗺️ 우리 반 전체 보기
+        </button>
+      </div>
+    `;
+  }
+}
+
+function resetRegisterForm() {
+  pendingLoc = null;
+  pendingPhoto = null;
+  pickingLoc = false;
+  switchTab('register', document.querySelectorAll('.panel-tab')[0]);
 }
 
 // ══════════════════════════════════════════════
