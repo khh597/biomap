@@ -599,6 +599,7 @@ function setupTabs() {
   } else {
     tabs.innerHTML = `
       <button class="panel-tab active" onclick="switchTab('teacher_view',this)">🗺️ 반별 현황</button>
+      <button class="panel-tab" onclick="switchTab('teacher_stats',this)">📋 학생별 현황</button>
       <button class="panel-tab" onclick="switchTab('teacher_manage',this)">⚙️ 관리</button>
     `;
     currentTab = 'teacher_view';
@@ -620,20 +621,35 @@ function renderPanel() {
   if (currentTab === 'register') body.innerHTML = renderRegister();
   else if (currentTab === 'view') body.innerHTML = renderStudentView();
   else if (currentTab === 'teacher_view') body.innerHTML = renderTeacherView();
+  else if (currentTab === 'teacher_stats') body.innerHTML = renderTeacherStats();
   else if (currentTab === 'teacher_manage') body.innerHTML = renderTeacherManage();
 }
 
 // ── 학생: 등록 ──
 function renderRegister() {
   const locSet = pendingLoc !== null;
+
+  // 등록 탭 진입 시 자동으로 위치 선택 모드 시작
+  if (!locSet && !pickingLoc) {
+    setTimeout(() => startPicking(), 100);
+  }
+
   return `
+    <div class="sec">📍 위치 선택</div>
+    <div class="loc-status ${locSet ? 'set' : ''}" id="locStatus">
+      ${locSet
+        ? `✅ 위치 선택 완료 (${pendingLoc.lat.toFixed(5)}, ${pendingLoc.lng.toFixed(5)})`
+        : `🎯 지도를 탭해서 위치를 선택하세요`}
+    </div>
+    ${locSet ? `<button class="btn btn-outline" onclick="startPicking()" style="margin-bottom:10px">📍 위치 다시 선택하기</button>` : ''}
+
     <div class="sec">사진 업로드</div>
     <label class="photo-zone" for="photoInput">
       <input type="file" id="photoInput" accept="image/*" onchange="handlePhoto(event)">
       <img id="photoPreview" />
       <div class="ph" id="photoPlaceholder">
         <div class="ph-icon">📷</div>
-        <div class="ph-text">탭하여 사진 찍기 또는 업로드</div>
+        <div class="ph-text">탭하여 사진 업로드</div>
       </div>
     </label>
 
@@ -652,15 +668,6 @@ function renderRegister() {
     </div>
     <div class="fg"><label>종 Species (학명)</label><input class="fi" id="t_s" placeholder="Taraxacum officinale" /></div>
 
-    <div class="sec">위치 선택</div>
-    <div class="loc-status ${locSet ? 'set' : ''}" id="locStatus">
-      ${locSet
-        ? `✅ 위치 선택 완료 (${pendingLoc.lat.toFixed(5)}, ${pendingLoc.lng.toFixed(5)})`
-        : `⚠️ 아래 버튼 → 지도에서 위치를 탭하세요`}
-    </div>
-    <button class="btn ${pickingLoc ? 'btn-green' : 'btn-outline'}" onclick="startPicking()">
-      ${pickingLoc ? '🎯 지도를 탭하세요...' : '📍 지도에서 위치 선택하기'}
-    </button>
     <button class="btn btn-green" onclick="submitBio()" style="margin-top:10px">🌿 생물 등록하기</button>
   `;
 
@@ -729,6 +736,75 @@ function renderTeacherView() {
     </div>
     <input class="search-box" placeholder="🔍 생물명 / 이름 / 반 검색..." oninput="filterCards(this.value,'teacher')" id="tchSearch">
     <div id="tchCards">${cards}</div>
+  `;
+}
+
+// ── 교사: 학생별 현황 ──
+let statsSelectedClass = '1';
+function renderTeacherStats() {
+  const allData = getData();
+
+  const classSelector = CLASSES.map(c =>
+    `<button class="btn ${statsSelectedClass === c ? 'btn-green' : 'btn-outline'}"
+      onclick="statsSelectedClass='${c}'; renderPanel()"
+      style="padding:4px 10px; font-size:0.8rem; margin:2px">${c}반</button>`
+  ).join('');
+
+  const classData = allData.filter(b => b.cls === statsSelectedClass);
+
+  // 1~30번 학생별 등록 수 집계
+  const rows = Array.from({length: 30}, (_, i) => {
+    const num = String(i + 1);
+    const bios = classData.filter(b => String(b.num) === num);
+    return { num, count: bios.length, bios };
+  });
+
+  const totalStudents = rows.filter(r => r.count > 0).length;
+  const totalBios = classData.length;
+
+  const tableRows = rows.map(r => `
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:7px 8px; text-align:center; font-weight:600">${r.num}번</td>
+      <td style="padding:7px 8px; text-align:center">
+        ${r.count > 0
+          ? `<span style="color:var(--green); font-weight:700">${r.count}개</span>`
+          : `<span style="color:var(--text-sub)">-</span>`}
+      </td>
+      <td style="padding:7px 8px; font-size:0.8rem; color:var(--text-sub)">
+        ${r.bios.map(b => `<span style="margin-right:4px">${b.emoji}${b.name}</span>`).join('')}
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="sec">반 선택</div>
+    <div style="display:flex; flex-wrap:wrap; gap:2px; margin-bottom:10px">${classSelector}</div>
+
+    <div style="display:flex; gap:10px; margin-bottom:12px">
+      <div style="flex:1; background:var(--surface2); border-radius:10px; padding:10px; text-align:center">
+        <div style="font-size:1.4rem; font-weight:700; color:var(--green)">${totalStudents}</div>
+        <div style="font-size:0.75rem; color:var(--text-sub)">등록한 학생 수</div>
+      </div>
+      <div style="flex:1; background:var(--surface2); border-radius:10px; padding:10px; text-align:center">
+        <div style="font-size:1.4rem; font-weight:700; color:var(--green)">${totalBios}</div>
+        <div style="font-size:0.75rem; color:var(--text-sub)">총 등록 생물 수</div>
+      </div>
+      <div style="flex:1; background:var(--surface2); border-radius:10px; padding:10px; text-align:center">
+        <div style="font-size:1.4rem; font-weight:700; color:var(--text-sub)">${30 - totalStudents}</div>
+        <div style="font-size:0.75rem; color:var(--text-sub)">미등록 학생 수</div>
+      </div>
+    </div>
+
+    <table style="width:100%; border-collapse:collapse; font-size:0.88rem">
+      <thead>
+        <tr style="background:var(--surface2); color:var(--text-sub)">
+          <th style="padding:7px 8px; text-align:center; width:50px">번호</th>
+          <th style="padding:7px 8px; text-align:center; width:55px">등록 수</th>
+          <th style="padding:7px 8px; text-align:left">등록 생물</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
+    </table>
   `;
 }
 
@@ -816,12 +892,8 @@ function refreshMarkers() {
   if (userRole === 'teacher') {
     visible = teacherViewClass === 'all' ? allData : allData.filter(b => b.cls === teacherViewClass);
   } else {
-    // 학생: 등록 탭이면 전체 반 표시, 뷰 탭이면 자기 반만
-    if (currentTab === 'view') {
-      visible = allData.filter(b => b.cls === userInfo.cls && b.grade === userInfo.grade);
-    } else {
-      visible = allData;
-    }
+    // 학생: 항상 자기 반만 표시
+    visible = allData.filter(b => b.cls === userInfo.cls && b.grade === userInfo.grade);
   }
 
   // 기존 마커 제거
