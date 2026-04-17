@@ -607,6 +607,7 @@ function setupTabs() {
 }
 
 function switchTab(tab, el) {
+  if (tab !== 'teacher_view') teacherSearchQuery = '';
   currentTab = tab;
   document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
@@ -620,7 +621,35 @@ function renderPanel() {
   const body = document.getElementById('panelBody');
   if (currentTab === 'register') body.innerHTML = renderRegister();
   else if (currentTab === 'view') body.innerHTML = renderStudentView();
-  else if (currentTab === 'teacher_view') body.innerHTML = renderTeacherView();
+  else if (currentTab === 'teacher_view') {
+    body.innerHTML = renderTeacherView();
+    // 검색창에 이벤트 연결 (innerHTML 교체 후 커서 위치 복원)
+    const input = document.getElementById('tchSearch');
+    if (input) {
+      input.focus();
+      const len = input.value.length;
+      input.setSelectionRange(len, len);
+      input.addEventListener('input', e => {
+        teacherSearchQuery = e.target.value;
+        // 카드만 업데이트 (검색창은 그대로 유지)
+        const allData = getData();
+        const cls = teacherViewClass;
+        const filtered = cls === 'all' ? allData : allData.filter(b => b.cls === cls);
+        const lq = teacherSearchQuery.toLowerCase();
+        const searched = !lq ? filtered : filtered.filter(b =>
+          b.name.includes(lq) ||
+          b.studentName.includes(lq) ||
+          String(b.num).includes(lq) ||
+          b.kingdom.includes(lq) ||
+          b.cls.includes(lq)
+        );
+        const el = document.getElementById('tchCards');
+        if (el) el.innerHTML = searched.length === 0
+          ? `<div class="empty"><div class="ei">🔍</div><p>검색 결과 없음</p></div>`
+          : searched.map(b => bioCard(b)).join('');
+      });
+    }
+  }
   else if (currentTab === 'teacher_stats') body.innerHTML = renderTeacherStats();
   else if (currentTab === 'teacher_manage') body.innerHTML = renderTeacherManage();
 }
@@ -709,6 +738,8 @@ function renderStudentView() {
 }
 
 // ── 교사: 반별 현황 ──
+let teacherSearchQuery = '';
+
 function renderTeacherView() {
   const allData = getData();
   const cls = teacherViewClass;
@@ -719,11 +750,21 @@ function renderTeacherView() {
   const classCounts = {};
   CLASSES.forEach(c => { classCounts[c] = allData.filter(b => b.cls === c).length; });
 
-  const cards = filtered.length === 0
-    ? `<div class="empty"><div class="ei">🔍</div><p>등록된 생물이 없어요</p></div>`
-    : filtered.map(b => bioCard(b)).join('');
+  // 검색어 적용
+  const lq = teacherSearchQuery.toLowerCase();
+  const searched = !lq ? filtered : filtered.filter(b =>
+    b.name.includes(lq) ||
+    b.studentName.includes(lq) ||
+    String(b.num).includes(lq) ||
+    b.kingdom.includes(lq) ||
+    b.cls.includes(lq)
+  );
 
-  return `
+  const cards = searched.length === 0
+    ? `<div class="empty"><div class="ei">🔍</div><p>검색 결과 없음</p></div>`
+    : searched.map(b => bioCard(b)).join('');
+
+  const html = `
     <div class="sec">반 선택</div>
     <div class="class-pills">
       <button class="class-pill ${cls==='all'?'active':''}" onclick="setTeacherClass('all')">전체 (${allData.length})</button>
@@ -734,9 +775,11 @@ function renderTeacherView() {
       <div class="stat"><div class="n">${new Set(filtered.map(b=>b.studentName)).size}</div><div class="l">참여 학생</div></div>
       <div class="stat"><div class="n">${Object.keys(kingdoms).length}</div><div class="l">계(界) 수</div></div>
     </div>
-    <input class="search-box" placeholder="🔍 생물명 / 이름 / 반 검색..." oninput="filterCards(this.value,'teacher')" id="tchSearch">
+    <input class="search-box" placeholder="🔍 생물명 / 이름 / 번호 검색..." id="tchSearch" value="${teacherSearchQuery}">
     <div id="tchCards">${cards}</div>
   `;
+
+  return html;
 }
 
 // ── 교사: 학생별 현황 ──
